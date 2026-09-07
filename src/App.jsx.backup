@@ -1,0 +1,215 @@
+import React, { useState, useEffect } from 'react';
+import Catalog from './views/Catalog';
+import Checkout from './views/Checkout';
+import AdminPanel from './components/AdminPanel';
+import { supabase } from './utils/supabaseClient';
+
+export default function App() {
+  const [currentView, setCurrentView] = useState('catalog');
+  const [cartItems, setCartItems] = useState([]);
+  const [logoClicks, setLogoClicks] = useState(0);
+  const [notification, setNotification] = useState(null);
+  const [isOnline, setIsOnline] = useState(true);
+
+  // ── Angalia muunganiko wa Supabase ──────────────────────────────
+  useEffect(() => {
+    const checkConnection = async () => {
+      try {
+        const { error } = await supabase.from('products').select('id').limit(1);
+        setIsOnline(!error);
+      } catch {
+        setIsOnline(false);
+      }
+    };
+    checkConnection();
+  }, []);
+
+  // ── Toa arifa inayoonekana kwa sekunde 3 ───────────────────────
+  const showNotif = (msg, type = 'success') => {
+    setNotification({ msg, type });
+    setTimeout(() => setNotification(null), 3000);
+  };
+
+  // ── Ongeza bidhaa kwenye kikapu ────────────────────────────────
+  const handleAddToCart = (product) => {
+    setCartItems(prev => {
+      const existing = prev.find(item => item.id === product.id);
+      if (existing) {
+        return prev.map(item =>
+          item.id === product.id
+            ? { ...item, quantity: (item.quantity || 1) + 1 }
+            : item
+        );
+      }
+      return [...prev, { ...product, quantity: 1 }];
+    });
+    showNotif(`✓ ${product.name} imeongezwa kwenye kikapu!`);
+  };
+
+  // ── Badilisha idadi ya bidhaa ──────────────────────────────────
+  const handleUpdateQuantity = (id, newQuantity) => {
+    if (newQuantity <= 0) {
+      setCartItems(prev => prev.filter(item => item.id !== id));
+    } else {
+      setCartItems(prev =>
+        prev.map(item =>
+          item.id === id ? { ...item, quantity: newQuantity } : item
+        )
+      );
+    }
+  };
+
+  // ── Safisha kikapu baada ya malipo ────────────────────────────
+  const handleClearCart = () => {
+    setCartItems([]);
+    setCurrentView('catalog');
+    showNotif('🎉 Malipo yamekamilika! Asante kwa biashara yako.');
+  };
+
+  // ── Siri ya Admin: bonyeza nembo mara 5 ──────────────────────
+  const handleSecretAdminTrigger = () => {
+    setLogoClicks(prev => {
+      const newCount = prev + 1;
+      if (newCount >= 5) {
+        setCurrentView('admin');
+        return 0;
+      }
+      setTimeout(() => setLogoClicks(0), 3000);
+      return newCount;
+    });
+  };
+
+  const totalCartCount = cartItems.reduce(
+    (sum, item) => sum + (item.quantity || 1), 0
+  );
+
+  const totalCartAmount = cartItems.reduce(
+    (sum, item) => sum + (Number(item.price || 0) * (item.quantity || 1)), 0
+  );
+
+  // ── Admin Panel: onyesha full screen bila nav ──────────────────
+  if (currentView === 'admin') {
+    return (
+      <AdminPanel onExit={() => setCurrentView('catalog')} />
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 text-gray-800 font-sans antialiased">
+
+      {/* ── ARIFA INAYOELEA ── */}
+      {notification && (
+        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[100] px-5 py-3 rounded-2xl shadow-xl text-sm font-bold text-white transition-all animate-bounce
+          ${notification.type === 'error' ? 'bg-rose-600' : 'bg-emerald-600'}`}>
+          {notification.msg}
+        </div>
+      )}
+
+      {/* ── NAVIGATION BAR ── */}
+      <nav className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+
+          {/* NEMBO YA LETEMA */}
+          <div
+            onClick={handleSecretAdminTrigger}
+            className="cursor-pointer space-y-0.5 select-none active:opacity-70"
+            title="LSIC Portal"
+          >
+            <span className="text-sm font-black tracking-tighter text-blue-900 uppercase block">
+              Letema Group
+            </span>
+            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">
+              LSIC Business Hub
+            </span>
+            {logoClicks > 0 && (
+              <span className="text-[8px] text-amber-500 font-bold block">
+                {'●'.repeat(logoClicks)}{'○'.repeat(5 - logoClicks)} Admin
+              </span>
+            )}
+          </div>
+
+          {/* VITUFE VYA NAVIGATION */}
+          <div className="flex items-center space-x-2">
+
+            {/* Hali ya muunganiko */}
+            <span className={`text-[8px] font-bold px-2 py-1 rounded-full
+              ${isOnline ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-500'}`}>
+              {isOnline ? '● Online' : '○ Offline'}
+            </span>
+
+            <button
+              onClick={() => setCurrentView('catalog')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all
+                ${currentView === 'catalog'
+                  ? 'bg-blue-900 text-white shadow-sm'
+                  : 'text-gray-600 hover:bg-gray-100'}`}
+            >
+              🏪 Katalogi
+            </button>
+
+            <button
+              onClick={() => setCurrentView('checkout')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all relative flex items-center space-x-1
+                ${currentView === 'checkout'
+                  ? 'bg-blue-900 text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+            >
+              <span>🛒 Kikapu</span>
+              {totalCartCount > 0 && (
+                <span className="bg-rose-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md animate-pulse ml-1">
+                  {totalCartCount}
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Mstari wa kikapu ukiwa na bidhaa */}
+        {totalCartCount > 0 && currentView === 'catalog' && (
+          <div className="bg-blue-950 px-4 py-2 flex justify-between items-center">
+            <span className="text-xs text-blue-200 font-medium">
+              🛒 {totalCartCount} bidhaa kwenye kikapu
+            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-black text-amber-400">
+                {Number(totalCartAmount).toLocaleString()} TZS
+              </span>
+              <button
+                onClick={() => setCurrentView('checkout')}
+                className="bg-amber-500 hover:bg-amber-400 text-white text-[10px] font-black px-3 py-1.5 rounded-lg transition-all"
+              >
+                Lipia Sasa →
+              </button>
+            </div>
+          </div>
+        )}
+      </nav>
+
+      {/* ── MAUDHUI MAKUU ── */}
+      <main className="py-4">
+        {currentView === 'catalog' && (
+          <Catalog onAddToCart={handleAddToCart} />
+        )}
+        {currentView === 'checkout' && (
+          <Checkout
+            cartItems={cartItems}
+            onUpdateQuantity={handleUpdateQuantity}
+            onClearCart={handleClearCart}
+            onContinueShopping={() => setCurrentView('catalog')}
+          />
+        )}
+      </main>
+
+      {/* ── FOOTER ── */}
+      <footer className="border-t border-gray-200 bg-white mt-8 py-6 text-center">
+        <p className="text-xs text-gray-400 font-medium">
+          © 2026 Letema Stationery & Internet Café · Mbeya, Tanzania
+        </p>
+        <p className="text-[10px] text-gray-300 mt-1">
+          Powered by Supabase · Built with React + Vite
+        </p>
+      </footer>
+
+    </div>
+  );
+}
